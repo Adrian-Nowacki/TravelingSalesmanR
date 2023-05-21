@@ -4,31 +4,124 @@ library(dplyr)
 library(tidyverse)
 library(geosphere)
 library(TSP)
-
+library(ggplot2)
+library(plotly)
+library(gridExtra)
+library(DT)
+library(leaflet.providers)
 data <- read.csv("data/cities_data.csv")
 
-ui <- fluidPage(
-  titlePanel("The Traveling Salesman Problem for Polish cities"),
+ui <-  fluidPage(
+  navbarPage(title = div("The Traveling Salesman Problem for Polish cities", style = "text-align:center; font-family: Candara; margin-left:auto;margin-right:auto;"),
+             
+  tags$head(
+  tags$style(HTML("
+      body {
+        background-color: #dbebf0; 
+        font-family:Verdana,sans-serif;
+        font-size:115%;
+      }
+      .navbar{
+        background-color:#306578;
+        height:75px;
+        width:100%;
+        text-align:center;
+        border-bottom:2px solid #222222;
+      }
+      .navbar-brand{
+          color:#ffffff!important; 
+          line-height: 40px!important;
+          justify-content: center; 
+          align-items: center;
+          font-size:26px!important;
+      }
+      .navbar-nav>li>a {
+          background-color:#306578!important;
+      }
+      #total_distance_output{
+          font-size:26px;
+          text-align:center;
+          font-family:Verdana,sans-serif;
+          font-weight:bold;
+          
+      }
+      #dt_sidebar {
+          background-color: #2c5c6d;
+          color:#ffffff!important;
+          height:85vh;
+          border:none!important;
+          border-right:1px solid #eeeeee!important;
+      }
+      #distance_plot{
+          margin-bottom:20px;
+      }
+      #map{
+          margin-bottom:40px;
+      }
+      #time_plot{
+          margin-bottom:20px;
+      }
+      
+    "))
+),
+  #titlePanel("The Traveling Salesman Problem for Polish cities"),
   sidebarLayout(
-    sidebarPanel(
-      sliderInput("num_cities", "Select cities (ranked by population):", min = 2, max = 66,value = c(2, 66), step = 1),
-      selectInput("method", "TSP calculation method:", choices = c("farthest_insertion", "nearest_insertion")),
-      selectInput("weight_column", "Weight column:", choices = c("None", colnames(data)[2:(ncol(data)-2)])),
-      selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa)),
-      selectInput("end_city", "End city:", choices = c("None", data$Nazwa)),
-      numericInput("iterations", "Iterations:", value = 50, min = 1, max = 100),
+    sidebarPanel(id = "dt_sidebar", style = "width: 85%; height 700px!important;",
+      sliderInput("num_cities", "Select cities (ranked by population):", min = 2, max = 66,value = c(2, 66), step = 1, width = "85%"),
+      selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "85%"),
+      selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "85%"),
+      selectInput("weight_column", "Weight column:", choices = c("None", colnames(data)[2:(ncol(data)-2)]), width = "85%"),
+      fluidRow(
+         column(6,  selectInput("method", "TSP calculation method:", choices = c("farthest_insertion", "nearest_insertion"))),
+         column(4, numericInput("iterations", "Iterations:", value = 50, min = 1, max = 200)),
+      ),
       actionButton("generate_button", "Generate route")
     ),
-    mainPanel(
-      leafletOutput("map"),
-      textOutput("total_distance_output"),
-      plotOutput("distance_plot")
+    mainPanel(id = "mainpanel",
+              tabsetPanel(id = "tabesetPanel",
+                          tabPanel("Interative Map", style = "padding:20px;",
+                                  leafletOutput("map", height = "600px"),
+                                  textOutput("total_distance_output")
+                          ),
+                          tabPanel("Data Frame Route", style = "padding:20px;",
+                                   splitLayout(
+                                      plotlyOutput("distance_plot", height = "300px", width = "98%"),
+                                      plotlyOutput("time_plot", height = "300px", width = "98%")
+                                   ),
+                                   DT::dataTableOutput("table_route", height = "400px")
+                          )
+              )
     )
   )
-)
+))
 
 server <- function(input, output, session) {
   
+  output$map <- renderLeaflet({
+    #arrange(id_order) %>% 
+    leaflet() %>% 
+      addTiles() %>%
+      setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
+      addProviderTiles(
+        "Esri.WorldGrayCanvas",
+        group = "Esri.WorldGrayCanvas"
+      ) %>%
+      addProviderTiles(
+        "OpenStreetMap",
+        group = "OpenStreetMap"
+      ) %>%
+      addProviderTiles(
+        "Esri.WorldStreetMap",
+        group = "Esri.WorldStreetMap"
+      ) %>%
+      addLayersControl(
+        baseGroups = c(
+          "Esri.WorldGrayCanvas", "OpenStreetMap", "Esri.WorldStreetMap"
+        ),
+        # position it on the topleft
+        position = "topleft"
+      )
+  })
  
  ## zdefiniowanie wyboru z listy miast na podstawie slidera
   
@@ -161,8 +254,9 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
         addTiles() %>% 
         addCircleMarkers(
           data = selected_data,
-          fillColor = 'red',
-          fillOpacity = 0.5,
+          radius = 5,
+          fillColor = '#050505',
+          fillOpacity = 0.7,
           stroke = FALSE,
           label = ~Nazwa
         ) %>% 
@@ -170,7 +264,26 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
           data = selected_data %>% arrange(id_order),
           lng = ~longitude,
           lat = ~latitude,
-          color = 'blue'
+          color = '#222222'
+        ) %>%
+        addProviderTiles(
+          "Esri.WorldGrayCanvas",
+          group = "Esri.WorldGrayCanvas"
+        ) %>%
+        addProviderTiles(
+          "OpenStreetMap",
+          group = "OpenStreetMap"
+        ) %>%
+        addProviderTiles(
+          "Esri.WorldStreetMap",
+          group = "Esri.WorldStreetMap"
+        ) %>%
+        addLayersControl(
+          baseGroups = c(
+            "Esri.WorldGrayCanvas", "OpenStreetMap", "Esri.WorldStreetMap"
+          ),
+          # position it on the topleft
+          position = "topleft"
         )
     })
     
@@ -184,7 +297,9 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     # Wyświetlanie łącznej długości trasy
-    output$total_distance_output <- renderText(paste("Długość trasy: ", total_distance, "kilometrów"))
+    output$total_distance_output <- renderText(
+      paste(total_distance, "km")
+      )
     
     
     
@@ -200,10 +315,61 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       distances <- c(distances, distance)
     }
     
+    
+    
+    plot_theme <- theme(
+      plot.background = element_rect(fill = "#306578"),
+      panel.background = element_rect(fill = "#306578"), 
+      axis.title = element_text(size = 10,
+                                color = "#dddddd"), 
+      plot.title = element_text(size = 8,
+                                color = "#dddddd",
+                                vjust = 2,
+                                hjust = 0.5), 
+      legend.background = element_rect(color = "#306578", 
+                                       fill = "#777777"),  
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 8),
+      axis.text = element_text(size = 8, 
+                               color = "#dddddd"))
+    
+    data_plots <- data.frame(Iteration = 1:isolate(input$iterations), Distance = distances, Time = runif(isolate(input$iterations)))
+    data_plots$CumulativeTime <- cumsum(data_plots$Time)
+    
     # Wykres
-    output$distance_plot <- renderPlot({
-      plot(1:isolate(input$iterations), distances, type = "b", xlab = "Iteration", ylab = "Route length")
+    output$distance_plot <- renderPlotly({
+
+      g <- ggplot(data_plots, aes(x = Iteration, y = Distance)) +
+        geom_line() +
+        geom_point() +
+        xlab("Iteration") +
+        ggtitle("Total distance for each iteration") +
+        ylab("Route length") + plot_theme
+      
+      ggplotly(g)%>% config(displayModeBar = F)
+      
     })
+    
+    output$time_plot <- renderPlotly({
+      
+      g2 <- ggplot(data_plots, aes(x = Iteration, y = CumulativeTime)) +
+        geom_line() +
+        geom_point() +
+        xlab("Iteration") +
+        ggtitle("Cumulative time for each iteration") +
+        ylab("Iteration time (ms)") + plot_theme
+      
+      
+      ggplotly(g2)%>% config(displayModeBar = F)
+      
+    })
+    
+    output$table_route <- DT::renderDataTable(DT::datatable(selected_data, options = list(
+      rownames = FALSE,
+      pageLength = 8,
+      scrollX = TRUE,
+      lengthMenu = c(6, 8))
+    ))
     
     
   })
