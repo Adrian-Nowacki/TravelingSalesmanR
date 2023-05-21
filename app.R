@@ -13,7 +13,7 @@ ui <- fluidPage(
     sidebarPanel(
       sliderInput("num_cities", "Select cities (ranked by population):", min = 2, max = 66,value = c(2, 66), step = 1),
       selectInput("method", "TSP calculation method:", choices = c("farthest_insertion", "nearest_insertion")),
-      selectInput("weight_column", "Weight column:", choices = colnames(data)[2:(ncol(data)-2)]),
+      selectInput("weight_column", "Weight column:", choices = c("None", colnames(data)[2:(ncol(data)-2)])),
       selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa)),
       selectInput("end_city", "End city:", choices = c("None", data$Nazwa)),
       numericInput("iterations", "Iterations:", value = 50, min = 1, max = 100),
@@ -75,26 +75,21 @@ server <- function(input, output, session) {
     data_coords <- selected_data %>% select(longitude, latitude)
     dist_mat <- as.matrix(distm(data_coords, fun = distHaversine)) / 1000
     
-    # Utworzenie obiektu TSP
-    tsp_prob <- TSP(dist_mat)
-    tsp_prob <- insert_dummy(tsp_prob, label = 'dummy')
-    
-    # Rozwiązanie problemu TSP
-    tour <- solve_TSP(tsp_prob, method = input$method, control = list(input$iterations))
-    
-    total_distance <- tour_length(tour) # całkowita odległość trasy
 #### 
     
     
     
 ### UTWORZENIE TSP Z WAGAMI
     # Wybór odpowiedniej kolumny z wagami i utworzenie skalowanej macierzy
-    weight_column <- input$weight_column
-    selected_data$weight <- selected_data[[weight_column]]
-    
-    scaled_dist_mat <- dist_mat * selected_data$weight
-    symmetric_dist_mat <- (scaled_dist_mat + t(scaled_dist_mat)) / 2
-    
+    if (input$weight_column != "None") {
+        weight_column <- input$weight_column
+        selected_data$weight <- selected_data[[weight_column]]
+        
+        scaled_dist_mat <- dist_mat * selected_data$weight
+        symmetric_dist_mat <- (scaled_dist_mat + t(scaled_dist_mat)) / 2
+    } else {
+        symmetric_dist_mat <- dist_mat
+    }
     # Utworzenie obiektu TSP
     tsp_prob <- TSP(symmetric_dist_mat)
     
@@ -134,7 +129,6 @@ server <- function(input, output, session) {
     }
     
     
-    
     #&& end_city != start_city
     if (!is.null(new_path)) {
       if (end_city != "None") {
@@ -144,12 +138,22 @@ server <- function(input, output, session) {
       #dummy_index <- which(names(new_path) == "dummy")
       #new_path <- new_path[-dummy_index]
       #}
-      selected_data <- selected_data %>% mutate(id_order = order(as.integer(new_path)))
     }
+    
+    
+selected_data <- selected_data %>% mutate(id_order = order(as.integer(new_path)))
+    
 
-    
-    
-    
+if ((start_city == "None" && end_city == "None") || start_city == end_city) {
+  
+  first_city_row <- selected_data[selected_data$id_order == 1, ]
+  first_city_row$id = selected_data$id[max(selected_data$id)] + 1
+  first_city_row$id_order = selected_data$id[max(selected_data$id_order)] + 1
+  
+  selected_data <- rbind(selected_data, first_city_row)
+  new_path <- append(new_path, first_city_row$id_order)
+}
+
     # Mapa
     output$map <- renderLeaflet({
         #arrange(id_order) %>% 
@@ -171,8 +175,16 @@ server <- function(input, output, session) {
     })
     
     
+    # Przygotowanie danych
+    route_data <- selected_data %>% filter(id_order %in% new_path) %>% arrange(id_order)
+    
+    # Obliczenie łącznej długości trasy
+    coords <- route_data[, c("longitude", "latitude")]
+    total_distance <- round(sum(geosphere::distHaversine(coords[1:nrow(coords),]))/1000, 3)
+    
+    
     # Wyświetlanie łącznej długości trasy
-    output$total_distance_output <- renderText(paste("Długość trasy:", round(total_distance, 3), "kilometrów"))
+    output$total_distance_output <- renderText(paste("Długość trasy: ", total_distance, "kilometrów"))
     
     
     
@@ -190,7 +202,7 @@ server <- function(input, output, session) {
     
     # Wykres
     output$distance_plot <- renderPlot({
-      plot(1:input$iterations, distances, type = "b", xlab = "Iteration", ylab = "Route length")
+      plot(1:isolate(input$iterations), distances, type = "b", xlab = "Iteration", ylab = "Route length")
     })
     
     
