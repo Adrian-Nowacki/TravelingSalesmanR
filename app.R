@@ -1,3 +1,13 @@
+
+
+# Adrian Nowacki
+# Aplikacja pozwala wygenerować najkrótszą trasę dla 66 polskich miast o największej liczbie ludności. 
+# Umożliwia wybór miasta startowego oraz końcowego, wagę odwiedzanej trasy oraz wybór algorytmu i jego iteracji.
+
+# https://adryanqe.shinyapps.io/TravelingSalesmanR/
+
+
+#Sys.setlocale(category = "LC_ALL", locale = "pl_PL.UTF-8")
 library(shiny)
 library(leaflet)
 library(dplyr)
@@ -12,40 +22,40 @@ library(htmlwidgets)
 library(leaflet.providers)
 library(htmltools)
 
-#library(rvest)
-#library(tidygeocoder)
+library(rvest)
+library(tidygeocoder)
 
 
-
-    #data <- read.csv("data/wagi_miast.csv")
+    #data <- read.csv("data/wagi_miast.csv", encoding = "UTF-8")
 
 # 1. dołączenie długości oraz szerokości geograficznej do miejscowosci
-        # data <- data %>% geocode(Nazwa, method = 'osm', lat = latitude , long = longitude)
+         #data <- data %>% geocode(Nazwa, method = 'osm', lat = latitude , long = longitude)
 
 # 2. pobranie danych populacji
-        # miasta_pop = read_html("https://pl.wikipedia.org/wiki/Dane_statystyczne_o_miastach_w_Polsce")
-        # table = html_node(miasta_pop, ".wikitable")
-        # table = html_table(table, fill = TRUE)
+         #miasta_pop = read_html("https://pl.wikipedia.org/wiki/Dane_statystyczne_o_miastach_w_Polsce")
+         #table = html_node(miasta_pop, ".wikitable")
+         #table = html_table(table, fill = TRUE)
 
     # wyodrębnienie miejscowosci i przypisanie kolumny z populacją
-        # a <- table[table$Miasto %in% data$Nazwa,]
-        # a <- a[-33, ]
+         #a <- table[table$Miasto %in% data$Nazwa,]
+         #a <- a[-33, ]
         
-        # data <- data %>% arrange(Nazwa)
-        # pop <- a$`Liczba ludności (01.01.2021)`
-        # data$population <- pop
-        # data <- data %>% arrange(desc(population))
-        # write.csv(data, "data/cities_data.csv", row.names = FALSE)
+         #data <- data %>% arrange(Nazwa)
+         #pop <- a$`Liczba ludności (01.01.2021)`
+         #data$population <- pop
+         #data <- data %>% arrange(desc(population))
+         #write.csv(data, "data/cities_data.csv", row.names = FALSE)
 
-
+# w celu poprawnej wizualizacji w aplikacji shiny na shinyapps.io usunięto polskie znaki z nazw miast
 data <- read.csv("data/cities_data.csv")
 
 
 
 ui <-  fluidPage(
   navbarPage(title = div("The Traveling Salesman Problem for Polish cities", style = "text-align:center; font-family: Candara; margin-left:auto;margin-right:auto;"),
+             windowTitle = HTML("Traveling Salesman in R</title>"),
              
-  tags$head(
+  tags$head(tags$meta(charset = "UTF-8"),
   tags$style(HTML("
       body {
         background-color: #dbebf0; 
@@ -138,10 +148,13 @@ ui <-  fluidPage(
   )
 ))
 
+
+
+
 server <- function(input, output, session) {
   
+  # pusta mapa podkładowa
   output$map <- renderLeaflet({
-    #arrange(id_order) %>% 
     leaflet() %>% 
       addProviderTiles(
         "Esri.WorldStreetMap",
@@ -164,8 +177,10 @@ server <- function(input, output, session) {
       )
   })
  
- ## zdefiniowanie wyboru z listy miast na podstawie slidera
   
+  
+  
+  ## zdefiniowanie wyboru z listy miast na podstawie slidera
   start_city_choices <- reactive({
     data$Nazwa[input$num_cities[1]:input$num_cities[2]]
   })
@@ -174,6 +189,8 @@ server <- function(input, output, session) {
     data$Nazwa[input$num_cities[1]:input$num_cities[2]]
   })
   
+  
+  # zaktualizowanie listy miast na podstawie slidera
   observe({
     choices_start <- start_city_choices()
     updateSelectInput(session, "start_city", choices = c("None", choices_start))
@@ -184,7 +201,7 @@ server <- function(input, output, session) {
   
   
 
-
+  ## switch nazw wag
   selected_weight <- eventReactive(input$generate_button,{
   switch(input$weight_column,
                   "None" = "None",
@@ -214,6 +231,8 @@ server <- function(input, output, session) {
   })
   
   
+  
+  ## switch nazw algorytmów
   selected_algorithm <- eventReactive(input$generate_button,{
     switch(input$method,
            "Identity-Based Heuristic" = "identity", 
@@ -228,10 +247,11 @@ server <- function(input, output, session) {
     )
   })
   
+  
+  
   observeEvent(input$generate_button, {
     
     # Utworzenie ramki danych tylko z wybranymi miastami
-    
     selected_data <- data[input$num_cities[1]:input$num_cities[2], ]
     selected_data <- tibble::rowid_to_column(selected_data, "id")
     
@@ -251,9 +271,12 @@ server <- function(input, output, session) {
     dist_mat <- as.matrix(distm(data_coords, fun = distHaversine)) / 1000
     
     
-### UTWORZENIE TSP Z WAGAMI
-   
+    
+    
+    
+    ### UTWORZENIE TSP Z WAGAMI
     weight_column <- selected_weight()
+    
     # Wybór odpowiedniej kolumny z wagami i utworzenie skalowanej macierzy
     if (weight_column != "None") {
       
@@ -265,15 +288,17 @@ server <- function(input, output, session) {
     } else {
         symmetric_dist_mat <- dist_mat
     }
-    # Utworzenie obiektu TSP
+    
     tsp_prob <- TSP(symmetric_dist_mat)
     
     tsp_prob <- insert_dummy(tsp_prob, label = 'dummy')
     
     algorithm <- selected_algorithm()
-    # Rozwiązanie problemu TSP
+
     tour <- solve_TSP(tsp_prob, method = algorithm, control = list(rep = input$iterations))
-#### 
+    #### 
+    
+    
     
     
     
@@ -310,16 +335,15 @@ server <- function(input, output, session) {
       if (end_city != "None") {
         names(new_path)[length(new_path)] <- end_city_row
       }
-      #if ((start_city == "None" && end_city != "None") || (start_city != "None" && end_city == "None")){
-      #dummy_index <- which(names(new_path) == "dummy")
-      #new_path <- new_path[-dummy_index]
-      #}
     }
     
   
+    
+    
 selected_data <- selected_data %>% mutate(id_order = order(as.integer(new_path)))
     
 
+# warunek przypisujący pierwsze miasto jako ostatnie
 if ((start_city == "None" && end_city == "None") || start_city == end_city) {
   
   first_city_row <- selected_data[selected_data$id_order == 1, ]
@@ -362,6 +386,7 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     
+    ##styl wykresu
     plot_theme <- theme(
       plot.background = element_rect(fill = "#306578"),
       panel.background = element_rect(fill = "#306578"), 
@@ -378,10 +403,16 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       axis.text = element_text(size = 8, 
                                color = "#dddddd"))
     
+    
+    
     data_plots <- data.frame(Iteration = 1:isolate(input$iterations), Distance = distances, Time = runif(isolate(input$iterations)))
     data_plots$CumulativeTime <- cumsum(data_plots$Time)
     
-    # Wykres
+    
+    
+    
+    
+    # wykres przedstawiający ogólną odległość dla każdej iteracji
     output$distance_plot <- renderPlotly({
 
       g <- ggplot(data_plots, aes(x = Iteration, y = Distance)) +
@@ -395,6 +426,9 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       
     })
     
+    
+    
+    # wykres przedstawiający skumulowany czas dla każdej iteracji
     output$time_plot <- renderPlotly({
       
       g2 <- ggplot(data_plots, aes(x = Iteration, y = CumulativeTime)) +
@@ -409,10 +443,13 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       
     })
     
+    
+    
+    
     selected_data <- selected_data %>%
       arrange(id_order)
     
-    
+    ## obliczenie ogólnej odległości oraz odległości pomiędzy miastami w kolejności trasy
     distances <- round(distHaversine(selected_data[, c("longitude", "latitude")])/1000, 3)
     selected_data$distance <- c(0, distances)
     selected_data$ov_distance <- cumsum(selected_data$distance)
@@ -424,6 +461,9 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
                              "Distance from the previous city",
                              "Cumulative distance")
     
+    
+    
+    ## data frame prezentująca wynikowe miasta
     output$table_route <- DT::renderDataTable(DT::datatable(datatable, options = list(
       rownames = FALSE,
       pageLength = 8,
@@ -432,6 +472,8 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       lengthMenu = c(6, 8)) 
     ))
     
+    
+    # przypisanie wartości w popupie
     labels <- paste(
       "Route order: <strong>", selected_data$id_order, "</strong><br/>",
       "City: <strong>", selected_data$Nazwa, "</strong><br/>",
@@ -440,9 +482,10 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       lapply(htmltools::HTML)
     
     
+    
+    
     # Mapa
     output$map <- renderLeaflet({
-      #arrange(id_order) %>% 
       leaflet() %>% 
         addProviderTiles(
           "Esri.WorldStreetMap",
