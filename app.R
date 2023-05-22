@@ -364,11 +364,27 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       
     })
     
-    output$table_route <- DT::renderDataTable(DT::datatable(selected_data, options = list(
+    selected_data <- selected_data %>%
+      arrange(id_order)
+    
+    
+    distances <- round(distHaversine(selected_data[, c("longitude", "latitude")])/1000, 3)
+    selected_data$distance <- c(0, distances)
+    selected_data$ov_distance <- cumsum(selected_data$distance)
+    
+    datatable <- selected_data[, c("id_order", "Nazwa", "distance", "ov_distance")]
+    
+    colnames(datatable) <- c("Route order",
+                             "City",
+                             "Distance from the previous city",
+                             "Cumulative distance")
+    
+    output$table_route <- DT::renderDataTable(DT::datatable(datatable, options = list(
       rownames = FALSE,
       pageLength = 8,
       scrollX = TRUE,
-      lengthMenu = c(6, 8))
+      rownames = TRUE,
+      lengthMenu = c(6, 8)) 
     ))
     
     
