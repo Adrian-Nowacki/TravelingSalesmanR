@@ -79,6 +79,9 @@ ui <-  fluidPage(
       .navbar-nav>li>a {
           background-color:#306578!important;
       }
+      p{
+          margin-bottom:40px;
+      }
       #total_distance_output{
           font-size:26px;
           text-align:center;
@@ -98,7 +101,7 @@ ui <-  fluidPage(
       }
       
       #map{
-          margin-bottom:40px;
+          margin-bottom:20px;
           border: 1px solid #333333;
       }
       #time_plot{
@@ -109,6 +112,7 @@ ui <-  fluidPage(
 ),
   sidebarLayout(
     sidebarPanel(id = "dt_sidebar", style = "width: 85%; height 700px!important;",
+                 p("The app allows to generate the shortest route for 66 Polish cities with the largest population."),
       sliderInput("num_cities", "Select cities (ranked by population):", min = 1, max = 66,value = c(1, 66), step = 1, width = "85%"),
       selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "85%"),
       selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "85%"),
