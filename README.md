@@ -32,6 +32,6 @@ install.packages(c("shiny", "dplyr", "sf", "leaflet", "tidyverse", "geosphere", 
                    "leaflet.providers", "DT", "shinyjs", "htmlwidgets", "ggplot2", "plotly"))
                    
 library(shiny)
-runGitHub("TravelingSalesmanR", "Adrian-Nowacki", subdir = "app/")
+runGitHub("TravelingSalesmanR", "Adrian-Nowacki", subdir = "app/", ref = "main")
 ```
 
