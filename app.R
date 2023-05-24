@@ -21,9 +21,10 @@ library(DT)
 library(htmlwidgets)
 library(leaflet.providers)
 library(htmltools)
-
-library(rvest)
-library(tidygeocoder)
+library(sf)
+library(shinyjs)
+#library(rvest)
+#library(tidygeocoder)
 
 
     #data <- read.csv("data/wagi_miast.csv", encoding = "UTF-8")
@@ -52,6 +53,7 @@ data <- read.csv("data/cities_data.csv")
 
 
 ui <-  fluidPage(
+  shinyjs::useShinyjs(),
   navbarPage(title = div("The Traveling Salesman Problem for Polish cities", style = "text-align:center; font-family: Candara; margin-left:auto;margin-right:auto;"),
              windowTitle = HTML("Traveling Salesman in R</title>"),
              
@@ -87,6 +89,7 @@ ui <-  fluidPage(
           text-align:center;
           font-family:Verdana,sans-serif;
           font-weight:bold;
+          margin-bottom:30px;
           
       }
       #dt_sidebar {
@@ -101,11 +104,29 @@ ui <-  fluidPage(
       }
       
       #map{
-          margin-bottom:20px;
+          margin-bottom:10px;
           border: 1px solid #333333;
       }
       #time_plot{
           margin-bottom:20px;
+      }
+      #download_gpkg_lines{
+          visibility:hidden;
+          background-color:#306578;
+          color:#ffffff;
+          font-size:12px;
+      }
+      #download_gpkg{
+          visibility:hidden;
+          background-color:#306578;
+          color:#ffffff;
+          font-size:12px;
+      }
+      #download_csv{
+          visibility:hidden;
+          background-color:#306578;
+          color:#ffffff;
+          font-size:12px;
       }
       
     "))
@@ -137,19 +158,26 @@ ui <-  fluidPage(
     mainPanel(id = "mainpanel",
               tabsetPanel(id = "tabesetPanel",
                           tabPanel("Interative Map", style = "padding:20px;",
-                                  leafletOutput("map", height = "600px"),
-                                  textOutput("total_distance_output")
+                                  leafletOutput("map", height = "580px"),
+                                  textOutput("total_distance_output"),
+                                  fluidRow(
+                                    column(6),
+                                    column(2,
+                                           downloadButton('download_gpkg', 'Save cities as .gpkg')),
+                                    column(2,
+                                           downloadButton('download_gpkg_lines', 'Save route as .gpkg')),
+                                    column(2,
+                                           downloadButton('download_csv', 'Save data as .csv'))
+                                  )
                           ),
                           tabPanel("Data Frame Route", style = "padding:20px;",
                                    splitLayout(
                                       plotlyOutput("distance_plot", height = "300px", width = "98%"),
-                                      plotlyOutput("time_plot", height = "300px", width = "98%")
-                                   ),
-                                   DT::dataTableOutput("table_route", height = "400px")
+                                      plotlyOutput("time_plot", height = "300px", width = "98%")),
+                                   DT::dataTableOutput("table_route", height = "400px"))
                           )
-              )
-    )
-  )
+                        )
+                      )
 ))
 
 
@@ -251,7 +279,7 @@ server <- function(input, output, session) {
     )
   })
   
-  
+ 
   
   observeEvent(input$generate_button, {
     
@@ -548,8 +576,76 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     })
     
     
+    ###  przypisanie opcji pobrania tabeli jako .csv
+    output$download_csv <- downloadHandler(
+      filename = function() {
+          paste0("TSP_data", ".csv", sep = "")
+      },
+      content = function(file) {
+        write.csv(selected_data, file, row.names = FALSE)
+      }
+    )
+
     
     
+    # utworzenie warstwy punktowej miast w celu jej pobrania
+    selected_data_sf <- st_as_sf(selected_data, coords = c("longitude", "latitude"), crs = 4326)
+    selected_data_sf <- st_transform(selected_data_sf, crs = 2180)
+    
+    
+    
+    
+    
+#### utworzenie warstwy liniowej trasy w celu jej pobrania
+    linie <- list()
+    for (i in 1:(nrow(selected_data)-1)) {
+      linie[i] <- st_sfc(st_linestring(matrix(c(selected_data$longitude[i], selected_data$latitude[i], 
+                                             selected_data$longitude[i+1], selected_data$latitude[i+1]), ncol = 2, byrow = TRUE)))
+    }
+
+    #Konwersja listy geometrii na obiekt sf
+    lines <- st_sfc(linie)
+    selected_data_lines <- st_as_sf(data.frame(id_order = selected_data$id_order[2:nrow(selected_data)] - 1,
+                                                Target_city = selected_data$Nazwa[2:nrow(selected_data)],
+                                                Distance = selected_data$distance[2:nrow(selected_data)],
+                                                Overall_distance = selected_data$ov_distance[2:nrow(selected_data)],
+                                                lines))
+    st_crs(selected_data_lines) <- st_crs(4326)
+    selected_data_lines <- st_transform(selected_data_lines, crs = 2180)
+####
+    
+    
+    
+    
+    ## pobieranie warstwy punktowej miast
+    output$download_gpkg <- downloadHandler(
+      filename = function() {
+          paste0("TSP_cities", "", sep = "")
+      },
+      content = function(file) {
+        st_write(selected_data_sf, file, driver = "GPKG")
+      }
+    )
+    
+    
+    ## pobieranie warstwy liniowej trasy
+    output$download_gpkg_lines <- downloadHandler(
+      filename = function() {
+        paste0("TSP_route", "", sep = "")
+      },
+      content = function(file) {
+        st_write(selected_data_lines, file, driver = "GPKG")
+      }
+    )
+    
+  })
+  
+  
+  ## ustawienie widocznosci przyciskow pobierania
+  observeEvent(input$generate_button, {
+      runjs('document.getElementById("download_gpkg_lines").style.visibility = "visible"')
+      runjs('document.getElementById("download_gpkg").style.visibility = "visible"')
+      runjs('document.getElementById("download_csv").style.visibility = "visible"')
   })
 }
 
