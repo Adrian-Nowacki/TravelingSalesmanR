@@ -135,6 +135,7 @@ ui <-  fluidPage(
     sidebarPanel(id = "dt_sidebar", style = "width: 85%; height 700px!important;",
                  p("The app allows to generate the shortest route for 66 Polish cities with the largest population."),
       sliderInput("num_cities", "Select cities (ranked by population):", min = 1, max = 66,value = c(1, 66), step = 1, width = "85%"),
+      selectInput("way", "Select way:", choices = c("straight", "roads"), width = "85%"),
       selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "85%"),
       selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "85%"),
       selectInput("weight_column", "Weight column:", 
@@ -299,20 +300,24 @@ server <- function(input, output, session) {
     
     
     # Utworzenie macierzy odległości
-    data_coords <- selected_data %>% select(longitude, latitude)
-    dist_mat <- as.matrix(distm(data_coords, fun = distHaversine)) / 1000
+    if (input$way == "straight"){
+        data_coords <- selected_data %>% select(longitude, latitude)
+        dist_mat <- as.matrix(distm(data_coords, fun = distHaversine)) / 1000
+    } else if (input$way == "roads"){
+        dist_mat <- read.csv("data/road_dist_mat.csv")
+        colnames(dist_mat) <- NULL
+        dist_mat <- dist_mat[1:nrow(selected_data), 1:nrow(selected_data)]
+        dist_mat <- as.dist(as.matrix(dist_mat))
+    }
     
     
-    
-    
+
     
     ### UTWORZENIE TSP Z WAGAMI
     weight_column <- selected_weight()
     
     # Wybór odpowiedniej kolumny z wagami i utworzenie skalowanej macierzy
     if (weight_column != "None") {
-      
-     
         selected_data$weight <- selected_data[[weight_column]]
         
         scaled_dist_mat <- dist_mat * selected_data$weight
@@ -320,8 +325,9 @@ server <- function(input, output, session) {
     } else {
         symmetric_dist_mat <- dist_mat
     }
+   
     
-    tsp_prob <- TSP(symmetric_dist_mat)
+    tsp_prob <- TSP(dist_mat)
     
     tsp_prob <- insert_dummy(tsp_prob, label = 'dummy')
     
@@ -392,16 +398,32 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     # Przygotowanie danych
     route_data <- selected_data %>% filter(id_order %in% new_path) %>% arrange(id_order)
     
-    # Obliczenie łącznej długości trasy
-    coords <- route_data[, c("longitude", "latitude")]
-    total_distance <- round(sum(geosphere::distHaversine(coords[1:nrow(coords),]))/1000, 3)
-    
-    
-    # Wyświetlanie łącznej długości trasy
-    output$total_distance_output <- renderText(
-      paste(total_distance, "km")
+    distance_list <- c()
+    if (input$way == "straight"){
+        # Obliczenie łącznej długości trasy
+        coords <- route_data[, c("longitude", "latitude")]
+        total_distance <- round(sum(geosphere::distHaversine(coords[1:nrow(coords),]))/1000, 3)
+        
+        # Wyświetlanie łącznej długości trasy
+        output$total_distance_output <- renderText(
+          paste(total_distance, "km")
+          )
+    } else if (input$way == "roads"){
+      #distance_list <- c()
+      for (i in 1:(nrow(route_data) - 1)){
+        from <- route_data[i, c("longitude", "latitude")]
+        to <- route_data[i + 1, c("longitude", "latitude")]
+        
+        route <- osrm::osrmRoute(src = from, dst = to, overview = "full")
+        distance <- route$distance
+        distance_list[i] <- distance
+      }
+      # Wyświetlanie łącznej długości trasy
+      output$total_distance_output <- renderText(
+        paste(round(sum(distance_list), 3), "km")
       )
-    
+    }
+        
     
     
     
@@ -477,15 +499,24 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     
-    
+ 
     selected_data <- selected_data %>%
       arrange(id_order)
     
-    ## obliczenie ogólnej odległości oraz odległości pomiędzy miastami w kolejności trasy
-    distances <- round(distHaversine(selected_data[, c("longitude", "latitude")])/1000, 3)
-    selected_data$distance <- c(0, distances)
-    selected_data$ov_distance <- cumsum(selected_data$distance)
+    #przypisanie długości dróg i linii prostych
+    if (input$way == "straight"){
+        ## obliczenie ogólnej odległości oraz odległości pomiędzy miastami w kolejności trasy
+        distances <- round(distHaversine(selected_data[, c("longitude", "latitude")])/1000, 3)
+        selected_data$distance <- c(0, distances)
+        selected_data$ov_distance <- rund(cumsum(selected_data$distance), 3)
+    } else if (input$way == "roads"){
+        selected_data$distance <- c(0, distance_list)
+        selected_data$ov_distance <- round(cumsum(selected_data$distance), 3)
+    }
+        
+        
     
+    #wyszczególnienie kolumn do data table
     datatable <- selected_data[, c("id_order", "Nazwa", "distance", "ov_distance")]
     
     colnames(datatable) <- c("Route order",
@@ -515,65 +546,105 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     
+    # pozyskanie geometrii wszystkich rekordów osm w celu wizualizacji
+    geometry_list <- vector("list", nrow(route_data) - 1)
     
-    # Mapa
-    output$map <- renderLeaflet({
+    for (i in 1:(nrow(route_data) - 1)){
+      from <- route_data[i, c("longitude", "latitude")]
+      to <- route_data[i + 1, c("longitude", "latitude")]
+      
+      route <- osrm::osrmRoute(src = from, dst = to, overview = "full")
+      geometry <- route$geometry
+      geometry_list[i] <- geometry
+      
+    }
+    roads_geom_list <- lapply(geometry_list, function(geom) st_linestring(geom))
+    roads_geom_list <- st_sfc(roads_geom_list)
+    
+    
+    
+    
+    # Wygenerowanie mapy
+    if (input$way == "straight"){
+        
+        output$map <- renderLeaflet({
+          leaflet() %>% 
+            addProviderTiles(
+              "Esri.WorldStreetMap",
+              group = "Esri.WorldStreetMap"
+            ) %>%
+            setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
+            addProviderTiles(
+              "Esri.WorldGrayCanvas",
+              group = "Esri.WorldGrayCanvas"
+            ) %>%
+            addProviderTiles(
+              "OpenStreetMap",
+              group = "OpenStreetMap"
+            ) %>%
+            addLayersControl(
+              baseGroups = c(
+                "Esri.WorldStreetMap", "Esri.WorldGrayCanvas", "OpenStreetMap"
+              ),
+              position = "topleft"
+            )  %>% 
+            addPolylines(
+              data = selected_data %>% arrange(id_order),
+              lng = ~longitude,
+              lat = ~latitude,
+              color = '#222222'
+            ) %>%
+            addCircleMarkers(
+              data = selected_data,
+              radius = 5,
+              fillColor = '#050505',
+              fillOpacity = 0.7,
+              stroke = FALSE,
+              label = ~labels,
+              labelOptions = labelOptions(
+                textsize = "12px") 
+            ) 
+        })
+    } else if (input$way == "roads"){
+      
+      output$map <- renderLeaflet({
       leaflet() %>% 
-        addProviderTiles(
-          "Esri.WorldStreetMap",
-          group = "Esri.WorldStreetMap"
-        ) %>%
-        setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
-        addProviderTiles(
-          "Esri.WorldGrayCanvas",
-          group = "Esri.WorldGrayCanvas"
-        ) %>%
-        addProviderTiles(
-          "OpenStreetMap",
-          group = "OpenStreetMap"
-        ) %>%
-        addLayersControl(
-          baseGroups = c(
-            "Esri.WorldStreetMap", "Esri.WorldGrayCanvas", "OpenStreetMap"
-          ),
-          position = "topleft"
-        )  %>% 
-        addPolylines(
-          data = selected_data %>% arrange(id_order),
-          lng = ~longitude,
-          lat = ~latitude,
-          color = '#222222'
-        ) %>%
-        addCircleMarkers(
-          data = selected_data,
-          radius = 5,
-          fillColor = '#050505',
-          fillOpacity = 0.7,
-          stroke = FALSE,
-          label = ~labels,
-          
-          labelOptions = labelOptions(
-            textsize = "12px") 
-        ) %>%
-        addProviderTiles(
-          "Esri.WorldGrayCanvas",
-          group = "Esri.WorldGrayCanvas"
-        ) %>%
-        addProviderTiles(
-          "OpenStreetMap",
-          group = "OpenStreetMap"
-        ) %>%
-        addProviderTiles(
-          "Esri.WorldStreetMap",
-          group = "Esri.WorldStreetMap"
-        ) %>%
-        addLayersControl(
-          baseGroups = c(
-            "Esri.WorldGrayCanvas", "OpenStreetMap", "Esri.WorldStreetMap"
-          ),
-          position = "topleft"
-        )
-    })
+          addCircleMarkers(
+            data = selected_data,
+            radius = 5,
+            fillColor = '#050505',
+            fillOpacity = 0.7,
+            stroke = FALSE,
+            label = ~labels,
+            labelOptions = labelOptions(
+              textsize = "12px") 
+          ) %>%
+          addPolylines(
+          data = roads_geom_list,
+          color = '#444444',
+          opacity = 1
+        )%>% 
+          addProviderTiles(
+            "Esri.WorldStreetMap",
+            group = "Esri.WorldStreetMap"
+          ) %>%
+          setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
+          addProviderTiles(
+            "Esri.WorldGrayCanvas",
+            group = "Esri.WorldGrayCanvas"
+          ) %>%
+          addProviderTiles(
+            "OpenStreetMap",
+            group = "OpenStreetMap"
+          ) %>%
+          addLayersControl(
+            baseGroups = c(
+              "Esri.WorldStreetMap", "Esri.WorldGrayCanvas", "OpenStreetMap"
+            ),
+            position = "topleft"
+          )
+      })
+    }
     
     
     ###  przypisanie opcji pobrania tabeli jako .csv
@@ -593,16 +664,23 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     selected_data_sf <- st_transform(selected_data_sf, crs = 2180)
     
     
-    
-    
+   
+  
     
 #### utworzenie warstwy liniowej trasy w celu jej pobrania
     linie <- list()
-    for (i in 1:(nrow(selected_data)-1)) {
-      linie[i] <- st_sfc(st_linestring(matrix(c(selected_data$longitude[i], selected_data$latitude[i], 
-                                             selected_data$longitude[i+1], selected_data$latitude[i+1]), ncol = 2, byrow = TRUE)))
+    if (input$way == "straight"){
+          for (i in 1:(nrow(selected_data)-1)) {
+            linie[i] <- st_sfc(st_linestring(matrix(c(selected_data$longitude[i], selected_data$latitude[i], 
+                                                   selected_data$longitude[i+1], selected_data$latitude[i+1]), ncol = 2, byrow = TRUE)))
+            
+            }
+    } else if (input$way == "roads"){
+        linie <- roads_geom_list
+        
     }
-
+    
+    
     #Konwersja listy geometrii na obiekt sf
     lines <- st_sfc(linie)
     selected_data_lines <- st_as_sf(data.frame(id_order = selected_data$id_order[2:nrow(selected_data)] - 1,
