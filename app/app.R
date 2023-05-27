@@ -23,6 +23,7 @@ library(leaflet.providers)
 library(htmltools)
 library(sf)
 library(shinyjs)
+library(leaflet.extras)
 #library(rvest)
 #library(tidygeocoder)
 
@@ -128,6 +129,10 @@ ui <-  fluidPage(
           color:#ffffff;
           font-size:12px;
       }
+      h5{
+          font-weight:bold;
+          font-family:Verdana,sans-serif;
+      }
       
     "))
 ),
@@ -135,7 +140,7 @@ ui <-  fluidPage(
     sidebarPanel(id = "dt_sidebar", style = "width: 85%; height 700px!important;",
                  p("The app allows to generate the shortest route for 66 Polish cities with the largest population."),
       sliderInput("num_cities", "Select cities (ranked by population):", min = 1, max = 66,value = c(1, 66), step = 1, width = "85%"),
-      selectInput("way", "Select way:", choices = c("straight", "roads"), width = "85%"),
+      selectInput("way", "Select way:", choices = c("straight lines", "roads"), width = "85%"),
       selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "85%"),
       selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "85%"),
       selectInput("weight_column", "Weight column:", 
@@ -300,7 +305,7 @@ server <- function(input, output, session) {
     
     
     # Utworzenie macierzy odległości
-    if (input$way == "straight"){
+    if (input$way == "straight lines"){
         data_coords <- selected_data %>% select(longitude, latitude)
         dist_mat <- as.matrix(distm(data_coords, fun = distHaversine)) / 1000
     } else if (input$way == "roads"){
@@ -399,7 +404,7 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     route_data <- selected_data %>% filter(id_order %in% new_path) %>% arrange(id_order)
     
     distance_list <- c()
-    if (input$way == "straight"){
+    if (input$way == "straight lines"){
         # Obliczenie łącznej długości trasy
         coords <- route_data[, c("longitude", "latitude")]
         total_distance <- round(sum(geosphere::distHaversine(coords[1:nrow(coords),]))/1000, 3)
@@ -504,11 +509,11 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       arrange(id_order)
     
     #przypisanie długości dróg i linii prostych
-    if (input$way == "straight"){
+    if (input$way == "straight lines"){
         ## obliczenie ogólnej odległości oraz odległości pomiędzy miastami w kolejności trasy
         distances <- round(distHaversine(selected_data[, c("longitude", "latitude")])/1000, 3)
         selected_data$distance <- c(0, distances)
-        selected_data$ov_distance <- rund(cumsum(selected_data$distance), 3)
+        selected_data$ov_distance <- round(cumsum(selected_data$distance), 3)
     } else if (input$way == "roads"){
         selected_data$distance <- c(0, distance_list)
         selected_data$ov_distance <- round(cumsum(selected_data$distance), 3)
@@ -563,71 +568,10 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     
-    
-    # Wygenerowanie mapy
-    if (input$way == "straight"){
-        
-        output$map <- renderLeaflet({
-          leaflet() %>% 
-            addProviderTiles(
-              "Esri.WorldStreetMap",
-              group = "Esri.WorldStreetMap"
-            ) %>%
-            setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
-            addProviderTiles(
-              "Esri.WorldGrayCanvas",
-              group = "Esri.WorldGrayCanvas"
-            ) %>%
-            addProviderTiles(
-              "OpenStreetMap",
-              group = "OpenStreetMap"
-            ) %>%
-            addLayersControl(
-              baseGroups = c(
-                "Esri.WorldStreetMap", "Esri.WorldGrayCanvas", "OpenStreetMap"
-              ),
-              position = "topleft"
-            )  %>% 
-            addPolylines(
-              data = selected_data %>% arrange(id_order),
-              lng = ~longitude,
-              lat = ~latitude,
-              color = '#222222'
-            ) %>%
-            addCircleMarkers(
-              data = selected_data,
-              radius = 5,
-              fillColor = '#050505',
-              fillOpacity = 0.7,
-              stroke = FALSE,
-              label = ~labels,
-              labelOptions = labelOptions(
-                textsize = "12px") 
-            ) 
-        })
-    } else if (input$way == "roads"){
-      
-      output$map <- renderLeaflet({
-      leaflet() %>% 
-          addCircleMarkers(
-            data = selected_data,
-            radius = 5,
-            fillColor = '#050505',
-            fillOpacity = 0.7,
-            stroke = FALSE,
-            label = ~labels,
-            labelOptions = labelOptions(
-              textsize = "12px") 
-          ) %>%
-          addPolylines(
-          data = roads_geom_list,
-          color = '#444444',
-          opacity = 1
-        )%>% 
-          addProviderTiles(
-            "Esri.WorldStreetMap",
-            group = "Esri.WorldStreetMap"
-          ) %>%
+    leaflet_text <- leaflet() %>% addProviderTiles(
+          "Esri.WorldStreetMap",
+          group = "Esri.WorldStreetMap"
+        ) %>%
           setView(lng = 19.3900, lat = 52.1300, zoom = 6) %>%
           addProviderTiles(
             "Esri.WorldGrayCanvas",
@@ -642,7 +586,56 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
               "Esri.WorldStreetMap", "Esri.WorldGrayCanvas", "OpenStreetMap"
             ),
             position = "topleft"
-          )
+          ) 
+    
+    # Wygenerowanie mapy
+    if (input$way == "straight lines"){
+        
+        output$map <- renderLeaflet({
+          leaflet_text %>%
+            addPolylines(
+              data = selected_data %>% arrange(id_order),
+              lng = ~longitude,
+              lat = ~latitude,
+              color = '#222222'
+            )%>% addControl(
+              html = tags$h5(paste('Optimized route generated from straight lines lines for', input$num_cities[2], 'cities')),
+              position = "topright"
+            ) %>%
+            addCircleMarkers(
+              data = selected_data,
+              radius = 5,
+              fillColor = '#050505',
+              fillOpacity = 0.7,
+              stroke = FALSE,
+              label = ~labels,
+              labelOptions = labelOptions(
+                  textsize = "12px") 
+            )
+        })
+    } else if (input$way == "roads"){
+      
+      output$map <- renderLeaflet({
+        leaflet_text %>%
+          addCircleMarkers(
+            data = selected_data,
+            radius = 5,
+            fillColor = '#050505',
+            fillOpacity = 0.7,
+            stroke = FALSE,
+            label = ~labels,
+            labelOptions = labelOptions(textsize = "12px")
+          ) %>%
+          addPolylines(
+            data = roads_geom_list,
+            color = '#27677c',
+            opacity = 1,
+            weight = 3,
+            dashArray = "8, 5",
+          ) %>% addControl(
+                     html = tags$h5(paste('Optimized route generated from roads for', input$num_cities[2], 'cities')),
+                     position = "topright"
+          ) 
       })
     }
     
@@ -669,7 +662,7 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
 #### utworzenie warstwy liniowej trasy w celu jej pobrania
     linie <- list()
-    if (input$way == "straight"){
+    if (input$way == "straight lines"){
           for (i in 1:(nrow(selected_data)-1)) {
             linie[i] <- st_sfc(st_linestring(matrix(c(selected_data$longitude[i], selected_data$latitude[i], 
                                                    selected_data$longitude[i+1], selected_data$latitude[i+1]), ncol = 2, byrow = TRUE)))
