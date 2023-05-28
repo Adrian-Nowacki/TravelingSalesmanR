@@ -1,5 +1,5 @@
-# shinyxcensus
-### *Traveling Salesman Problem (TSP) for polish cities*
+
+## *Traveling Salesman Problem (TSP) for polish cities*
 https://adryanqe.shinyapps.io/TravelingSalesmanR/
 <br />
 
