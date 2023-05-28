@@ -66,3 +66,28 @@ body {
   .navbar .navbar-nav {
     float: right;
 }
+@media screen and (max-width: 600px){
+                                    
+        #dt_sidebar {
+              width:100vw!important;
+              border-right:none!important;
+              border-bottom:1px solid #eeeeee!important;
+              height:100%!important;
+              margin-top:30px!important;
+        }
+        #mainpanel {
+              min-width:0!important;
+              overflow-x: scroll!important;
+        }
+        .navbar {
+              margin-bottom:10px!important;
+              height:110px!important;
+              padding-left:15px!important;
+              padding-right:15px!important;
+        }
+        .container-fluid{
+          padding-right:0!important;
+          padding-left:0!important;
+
+        }
+}
