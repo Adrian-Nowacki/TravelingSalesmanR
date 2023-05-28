@@ -1,0 +1,68 @@
+body {
+    background-color: #dbebf0; 
+    font-family:Verdana,sans-serif;
+    font-size:100%;
+  }
+  .navbar{
+    background-color:#306578;
+    height:55px;
+    width:100%;
+    text-align:center;
+    border-bottom:2px solid #222222;
+  }
+  .navbar-brand{
+    color:#ffffff!important; 
+    line-height:28px!important;
+    font-size:20px!important;
+  }
+  .navbar-nav>li>a {
+    display:none!important;
+  }
+  p{
+    margin-bottom:30px;
+  }
+  #total_distance_output{
+    font-size:20px;
+    text-align:center;
+    font-family:Verdana,sans-serif;
+    font-weight:bold;
+    margin-bottom:20px;
+  }
+  #dt_sidebar {
+    background-color: #2c5c6d;
+    color:#ffffff!important;
+    height:85vh;
+    border:none!important;
+    border-right:1px solid #eeeeee!important;
+    margin-left: 0px!important;
+    margin-right: 0px!important;
+  }
+  #distance_iter_plot{
+    margin-bottom:20px;
+  }
+  #map{
+    margin-bottom:10px;
+    border: 1px solid #333333;
+    width: 100vw;
+  }
+  #time_plot{
+    margin-bottom:20px;
+  }
+  #download_gpkg_lines,
+  #download_gpkg,
+  #download_csv{
+    visibility:hidden;
+    background-color:#306578;
+    color:#ffffff;
+    font-size:10px;
+  }
+  h6{
+    font-weight:bold;
+    font-family:Verdana,sans-serif;
+  }
+  #generate_button, #iterations{
+    font-size:11px;
+  }
+  .navbar .navbar-nav {
+    float: right;
+}

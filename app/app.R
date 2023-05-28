@@ -23,7 +23,8 @@ library(leaflet.providers)
 library(htmltools)
 library(sf)
 library(shinyjs)
-library(leaflet.extras)
+library(shinycssloaders)
+library(shinybusy)
 #library(rvest)
 #library(tidygeocoder)
 
@@ -54,95 +55,28 @@ data <- read.csv("data/cities_data.csv")
 
 
 ui <-  fluidPage(
-  shinyjs::useShinyjs(),
+  shinyjs::useShinyjs(), collapsible = TRUE,
+  includeCSS(path = "style.css"),
   navbarPage(title = div("The Traveling Salesman Problem for Polish cities", style = "text-align:center; font-family: Candara; margin-left:auto;margin-right:auto;"),
              windowTitle = HTML("Traveling Salesman in R</title>"),
              
   tags$head(tags$meta(charset = "UTF-8"),
-  tags$style(HTML("
-      body {
-        background-color: #dbebf0; 
-        font-family:Verdana,sans-serif;
-        font-size:115%;
-      }
-      .navbar{
-        background-color:#306578;
-        height:75px;
-        width:100%;
-        text-align:center;
-        border-bottom:2px solid #222222;
-      }
-      .navbar-brand{
-          color:#ffffff!important; 
-          line-height: 40px!important;
-          justify-content: center; 
-          align-items: center;
-          font-size:26px!important;
-      }
-      .navbar-nav>li>a {
-          background-color:#306578!important;
-      }
-      p{
-          margin-bottom:40px;
-      }
-      #total_distance_output{
-          font-size:26px;
-          text-align:center;
-          font-family:Verdana,sans-serif;
-          font-weight:bold;
-          margin-bottom:30px;
-          
-      }
-      #dt_sidebar {
-          background-color: #2c5c6d;
-          color:#ffffff!important;
-          height:85vh;
-          border:none!important;
-          border-right:1px solid #eeeeee!important;
-      }
-      #distance_plot{
-          margin-bottom:20px;
-      }
-      
-      #map{
-          margin-bottom:10px;
-          border: 1px solid #333333;
-      }
-      #time_plot{
-          margin-bottom:20px;
-      }
-      #download_gpkg_lines{
-          visibility:hidden;
-          background-color:#306578;
-          color:#ffffff;
-          font-size:12px;
-      }
-      #download_gpkg{
-          visibility:hidden;
-          background-color:#306578;
-          color:#ffffff;
-          font-size:12px;
-      }
-      #download_csv{
-          visibility:hidden;
-          background-color:#306578;
-          color:#ffffff;
-          font-size:12px;
-      }
-      h5{
-          font-weight:bold;
-          font-family:Verdana,sans-serif;
-      }
-      
-    "))
+),
+tabPanel(
+  HTML("<div style='display: flex; margin-top:12px; margin-right:10px;'>
+          <a href='https://github.com/Adrian-Nowacki/TravelingSalesmanR'>
+            <img src='github-sign.png' style='width: 30px; margin-right: 10px;'/>
+            <span style='font-size: 16px; color: white;display: inline-block; vertical-align: middle;'>GitHub</span>
+          </a>
+        </div>")
 ),
   sidebarLayout(
-    sidebarPanel(id = "dt_sidebar", style = "width: 85%; height 700px!important;",
+    sidebarPanel(id = "dt_sidebar", style = "width: 85%;",
                  p("The app allows to generate the shortest route for 66 Polish cities with the largest population."),
-      sliderInput("num_cities", "Select cities (ranked by population):", min = 1, max = 66,value = c(1, 66), step = 1, width = "85%"),
-      selectInput("way", "Select way:", choices = c("straight lines", "roads"), width = "85%"),
-      selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "85%"),
-      selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "85%"),
+      sliderInput("num_cities", "Select cities (ranked by population):", min = 1, max = 66,value = c(1, 66), step = 1, width = "92%"),
+      selectInput("way", "Select way:", choices = c("straight lines", "roads"), width = "92%"),
+      selectInput("start_city", "Starting city:", choices = c("None", data$Nazwa), width = "92%"),
+      selectInput("end_city", "End city:", choices = c("None", data$Nazwa), width = "92%"),
       selectInput("weight_column", "Weight column:", 
                   choices = c("None","Restaurant","History", "Long Journeys", "Cycling","Swimming",
                               "Crowds", "Paintings", "Theatres", "Heat","Concerts", "Spending Time in Nature",
@@ -150,21 +84,21 @@ ui <-  fluidPage(
                               "Internet Information About City", "Animals","Parks","Sea",
                               "Non Touristy Places", "Places", "Average Weight"), 
                   selected = "None", 
-                  width = "85%"),
+                  width = "92%"),
       fluidRow(
          column(7,  selectInput("method", "Algorithm:", 
                                 choices = c("Identity-Based Heuristic", "Random Search", "Nearest Neighbor Insertion",
                                             "Cheapest Insertion","Farthest Insertion",  "Arbitrary Insertion",
                                             "Nearest Neighbor", "Repetitive Nearest Neighbor", "2-Opt"), 
                                 selected = "Nearest Neighbor")),
-         column(3, numericInput("iterations", "Iterations:", value = 50, min = 1, max = 500))
+         column(4, numericInput("iterations", "Iterations:", value = 50, min = 1, max = 1000))
       ),
       actionButton("generate_button", "Generate route")
     ),
     mainPanel(id = "mainpanel",
-              tabsetPanel(id = "tabesetPanel",
+              tabsetPanel(id = "tabsetPanel",
                           tabPanel("Interative Map", style = "padding:20px;",
-                                  leafletOutput("map", height = "580px"),
+                                  leafletOutput("map", height = "500px"),
                                   textOutput("total_distance_output"),
                                   fluidRow(
                                     column(6),
@@ -176,20 +110,24 @@ ui <-  fluidPage(
                                            downloadButton('download_csv', 'Save data as .csv'))
                                   )
                           ),
-                          tabPanel("Data Frame Route", style = "padding:20px;",
+                          tabPanel("Distance stats", style = "padding:20px;",
                                    splitLayout(
-                                      plotlyOutput("distance_plot", height = "300px", width = "98%"),
-                                      plotlyOutput("time_plot", height = "300px", width = "98%")),
-                                   DT::dataTableOutput("table_route", height = "400px"))
+                                      plotlyOutput("distance_iter_plot", height = "30vh", width = "98%") %>% withSpinner(type = 5, color = "#306578", size = 0.5),
+                                      plotlyOutput("time_plot", height = "30vh", width = "98%") %>% withSpinner(type = 5, color = "#306578", size = 0.5)),
+                                   DT::dataTableOutput("table_route", height = "40vh") %>% withSpinner(type = 5, color = "#306578", size = 0.5)),
+                          
+                          tabPanel(id = "dist_tab", value = "dist_tab", "Duration stats", style = "padding:20px;",
+                                     plotlyOutput("duration_plot", height = "40vh", width = "100%") %>% withSpinner(type = 5, color = "#306578", size = 0.5)
+                                     )
                           )
+              
                         )
                       )
 ))
 
 
-
-
 server <- function(input, output, session) {
+
   
   # pusta mapa podkładowa
   output$map <- renderLeaflet({
@@ -288,7 +226,11 @@ server <- function(input, output, session) {
  
   
   observeEvent(input$generate_button, {
-    
+    show_modal_spinner(
+      spin = "fading-circle",
+      color = "#306578",
+      text = "Calculating the most optimal route...",
+    )
     # Utworzenie ramki danych tylko z wybranymi miastami
     selected_data <- data[input$num_cities[1]:input$num_cities[2], ]
     selected_data <- tibble::rowid_to_column(selected_data, "id")
@@ -332,7 +274,7 @@ server <- function(input, output, session) {
     }
    
     
-    tsp_prob <- TSP(dist_mat)
+    tsp_prob <- TSP(symmetric_dist_mat)
     
     tsp_prob <- insert_dummy(tsp_prob, label = 'dummy')
     
@@ -400,10 +342,35 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
 
     
     
-    # Przygotowanie danych
+##### Przygotowanie danych osm do trasy obejmującej drogi
+
+      # osrm_route <- function(from, to) {
+      #   route <- osrm::osrmRoute(src = from, dst = to)
+      #   geometry <- route$geometry
+      #   distance <- route$distance
+      #   
+      #   return(list(geometry = geometry, distance = distance))
+      # }
+      # 
+      # dist_mat <- matrix(0, nrow = nrow(selected_data), ncol = nrow(selected_data), 
+      #                    dimnames = list(selected_data$Nazwa, selected_data$Nazwa))
+      # 
+      # for (i in 1:nrow(selected_data)) {
+      #   for (j in 1:nrow(selected_data)) {
+      #     if (i != j) {
+      #       from <- selected_data[i, c("longitude", "latitude")]
+      #       to <- selected_data[j, c("longitude", "latitude")]
+      #       result <- osrm_route(from, to)
+      #       dist_mat[i, j] <- result$distance
+      #       dist_mat[j, i] <- result$distance
+      #     }
+      #   }
+      # }
+
     route_data <- selected_data %>% filter(id_order %in% new_path) %>% arrange(id_order)
     
     distance_list <- c()
+    duration_list <- c()
     if (input$way == "straight lines"){
         # Obliczenie łącznej długości trasy
         coords <- route_data[, c("longitude", "latitude")]
@@ -422,13 +389,22 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
         route <- osrm::osrmRoute(src = from, dst = to, overview = "full")
         distance <- route$distance
         distance_list[i] <- distance
+        duration <- round(route$duration, 0)
+        duration_list[i] <- duration
       }
-      # Wyświetlanie łącznej długości trasy
+      total_duration <- sum(distance_list)
+      hours <- round(total_duration %/% 60, 0)
+      minutes <- round(total_duration %% 60, 0)
+      # Wyświetlanie łącznej długości trasy i czasu
       output$total_distance_output <- renderText(
-        paste(round(sum(distance_list), 3), "km")
+        
+        paste0(hours, " h ", minutes, " min  /  ", round(sum(distance_list), 3), " km")
       )
     }
         
+#####
+    
+    
     
     
     
@@ -439,12 +415,10 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     # Rozwiązanie problemu TSP
     for (i in 1:input$iterations) {
       tour <- solve_TSP(tsp_prob, method = algorithm, control = list(rep = i))
-      distance <- tour_length(tour)
+      distance <- tour_length(round(tour, 3))
       distances <- c(distances, distance)
     }
-    
-    
-    
+   
     ##styl wykresu
     plot_theme <- theme(
       plot.background = element_rect(fill = "#306578"),
@@ -472,13 +446,13 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     # wykres przedstawiający ogólną odległość dla każdej iteracji
-    output$distance_plot <- renderPlotly({
+    output$distance_iter_plot <- renderPlotly({
 
       g <- ggplot(data_plots, aes(x = Iteration, y = Distance)) +
         geom_line() +
         geom_point() +
         xlab("Iteration") +
-        ggtitle("Total distance for each iteration") +
+        ggtitle("Estimated total distance for each iteration (without the same end city as starting city)") +
         ylab("Route length") + plot_theme
       
       ggplotly(g)%>% config(displayModeBar = F)
@@ -487,8 +461,8 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     
     
     
-    # wykres przedstawiający skumulowany czas dla każdej iteracji
-    output$time_plot <- renderPlotly({
+     #wykres przedstawiający skumulowany czas dla każdej iteracji
+     output$time_plot <- renderPlotly({
       
       g2 <- ggplot(data_plots, aes(x = Iteration, y = CumulativeTime)) +
         geom_line() +
@@ -502,9 +476,11 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       
     })
     
-    
-    
- 
+
+     
+     
+     
+
     selected_data <- selected_data %>%
       arrange(id_order)
     
@@ -520,6 +496,38 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     }
         
         
+    
+    
+    
+    
+ ##### WYKRESY CZASU DROGI ORAZ ODLEGŁOŚCI
+    
+    plot_data <- selected_data %>% arrange(id_order)
+    duration_list <- duration_list[-length(duration_list)]
+    duration_list <- c(0, duration_list)
+    plot_data <- plot_data[ -nrow(plot_data),]
+    plot_data$duration <- duration_list
+    
+    City <- reorder(plot_data$Nazwa, plot_data$id_order)
+    
+    
+    ## wykres czasu drogi dla wszystkich miast
+     output$duration_plot <- renderPlotly({
+    
+      g3 <- ggplot(plot_data, aes(x = City, y = duration, group=1)) +
+        geom_line() +
+        geom_point() +
+        xlab("") +
+        ggtitle("Duration from previous city") +
+        ylab("Duration in minutes") + plot_theme + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+       ggplotly(g3)%>% config(displayModeBar = F)
+       })
+    
+
+ ######  
+
+    
     
     #wyszczególnienie kolumn do data table
     datatable <- selected_data[, c("id_order", "Nazwa", "distance", "ov_distance")]
@@ -588,9 +596,10 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
             position = "topleft"
           ) 
     
+    
+    
     # Wygenerowanie mapy
     if (input$way == "straight lines"){
-        
         output$map <- renderLeaflet({
           leaflet_text %>%
             addPolylines(
@@ -599,7 +608,7 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
               lat = ~latitude,
               color = '#222222'
             )%>% addControl(
-              html = tags$h5(paste('Optimized route generated from straight lines lines for', input$num_cities[2], 'cities')),
+              html = tags$h6(paste('Optimized route generated from straight lines for', input$num_cities[2], 'cities')),
               position = "topright"
             ) %>%
             addCircleMarkers(
@@ -614,7 +623,6 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
             )
         })
     } else if (input$way == "roads"){
-      
       output$map <- renderLeaflet({
         leaflet_text %>%
           addCircleMarkers(
@@ -633,12 +641,12 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
             weight = 3,
             dashArray = "8, 5",
           ) %>% addControl(
-                     html = tags$h5(paste('Optimized route generated from roads for', input$num_cities[2], 'cities')),
+                     html = tags$h6(paste('Optimized route generated from roads for', input$num_cities[2], 'cities')),
                      position = "topright"
           ) 
       })
     }
-    
+    remove_modal_spinner()
     
     ###  przypisanie opcji pobrania tabeli jako .csv
     output$download_csv <- downloadHandler(
@@ -717,6 +725,11 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
       runjs('document.getElementById("download_gpkg_lines").style.visibility = "visible"')
       runjs('document.getElementById("download_gpkg").style.visibility = "visible"')
       runjs('document.getElementById("download_csv").style.visibility = "visible"')
+      if (input$way == "straight lines"){
+        hideTab(inputId = "tabsetPanel", target = "dist_tab")
+      } else if (input$way == "roads"){
+        showTab(inputId = "tabsetPanel", target = "dist_tab")
+      }
   })
 }
 
