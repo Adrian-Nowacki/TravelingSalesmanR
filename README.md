@@ -29,7 +29,8 @@ The app allows to generate the shortest route for 66 Polish cities with the larg
 
 ```
 install.packages(c("shiny", "dplyr", "sf", "leaflet", "tidyverse", "geosphere", "TSP", "htmltools",
-                   "leaflet.providers", "DT", "shinyjs", "htmlwidgets", "ggplot2", "plotly"))
+                   "leaflet.providers", "DT", "shinyjs", "htmlwidgets", "ggplot2", "plotly",
+                   "shinycssloaders", "shinybusy", "))
                    
 library(shiny)
 runGitHub("TravelingSalesmanR", "Adrian-Nowacki", subdir = "app/", ref = "main")
