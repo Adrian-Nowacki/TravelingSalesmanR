@@ -65,7 +65,13 @@ body {
   }
   .navbar .navbar-nav {
     float: right;
-}
+  }
+  #distance_stats, #duration_stats, #cor_stats, #distance_lon_route, #duration_lon_route{
+    text-align:center;
+    margin-top:20px;
+    font-weight:bold;
+    font-size:14px;
+  }
 @media screen and (max-width: 600px){
                                     
         #dt_sidebar {

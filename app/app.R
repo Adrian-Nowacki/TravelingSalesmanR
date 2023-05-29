@@ -116,8 +116,21 @@ tabPanel(
                                    DT::dataTableOutput("table_route", height = "40vh") %>% withSpinner(type = 5, color = "#306578", size = 0.5)),
                           
                           tabPanel(id = "dist_tab", value = "dist_tab", "Duration stats", style = "padding:20px;",
-                                     plotlyOutput("duration_plot", height = "40vh", width = "100%") %>% withSpinner(type = 5, color = "#306578", size = 0.5)
+                                     plotlyOutput("duration_plot", height = "40vh", width = "100%") %>% withSpinner(type = 5, color = "#306578", size = 0.5),
+                                     textOutput("cor_stats"),
+                                     fluidRow(
+                                       column(6,
+                                               textOutput("distance_stats")),
+                                       column(6,
+                                              textOutput("duration_stats"))
+                                     ),
+                                     fluidRow(
+                                       column(6,
+                                              textOutput("distance_lon_route")),
+                                       column(6,
+                                              textOutput("duration_lon_route"))
                                      )
+                                       )
                           )
               
                         )
@@ -572,6 +585,37 @@ if ((start_city == "None" && end_city == "None") || start_city == end_city) {
     }
     roads_geom_list <- lapply(geometry_list, function(geom) st_linestring(geom))
     roads_geom_list <- st_sfc(roads_geom_list)
+    
+    
+    
+    #browser()
+    max_route <- which.max(plot_data$duration)
+    mean_hours <- mean(plot_data$duration) %/% 60
+    mean_minutes <- mean(plot_data$duration) %% 60
+    longest_distance <- which.max(plot_data$distance)
+    longest_duration <- which.max(plot_data$duration)
+    
+    
+    output$cor_stats <- renderText(
+      paste0("Correlation between distance and duration: ", round(cor(plot_data$distance, plot_data$duration), 2))
+    )
+    
+    output$distance_stats <- renderText(
+      paste0("Average distance between cities: ", round(mean(plot_data$distance), 3), " km"),
+    )
+    
+    output$distance_lon_route <- renderText(
+      paste0("Longest route by distance: ", plot_data$Nazwa[longest_distance - 1], " - ", plot_data$Nazwa[longest_distance])
+    )
+    
+    output$duration_stats <- renderText(
+      #paste0("Correlation: ", cor(plot_data$distance, plot_data$duration), "\n",
+      paste0("Average duration between cities: ", mean_hours, " h ", round(mean_minutes, 0), " min")
+             
+    )
+    output$duration_lon_route <- renderText(
+      paste0("Longest route by duration: ", plot_data$Nazwa[longest_duration - 1], " - ", plot_data$Nazwa[longest_duration])
+    )
     
     
     
